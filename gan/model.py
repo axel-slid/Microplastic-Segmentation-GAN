@@ -1,6 +1,4 @@
 # %%
-
-
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -11,9 +9,10 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 
-
+# Define the Generator network
 class Generator(nn.Module):
     def __init__(self):
+        # Encoder part of the generator
         super(Generator, self).__init__()
         self.encoder = nn.Sequential(
             nn.Conv2d(4, 64, kernel_size=4, stride=2, padding=1),
@@ -25,6 +24,7 @@ class Generator(nn.Module):
             nn.Conv2d(256, 512, kernel_size=4, stride=2, padding=1),
             nn.ReLU(),
         )
+        # Decoder part of the generator
         self.decoder = nn.Sequential(
             nn.ConvTranspose2d(512, 256, kernel_size=4, stride=2, padding=1),
             nn.ReLU(),
@@ -35,14 +35,14 @@ class Generator(nn.Module):
             nn.ConvTranspose2d(64, 3, kernel_size=4, stride=2, padding=1),
             nn.Tanh(),
         )
-
+    # Forward pass through the generator
     def forward(self, x, original_image, mask):
         x = self.encoder(x)
         x = self.decoder(x)
         x = x * mask + original_image * (1 - mask)
         return x
 
-
+# Define the Discriminator network
 class Discriminator(nn.Module):
     def __init__(self):
         super(Discriminator, self).__init__()
@@ -58,11 +58,11 @@ class Discriminator(nn.Module):
             nn.Conv2d(512, 1, kernel_size=4, stride=2, padding=1),
             nn.Sigmoid()
         )
-
+    # Forward pass through the discriminator
     def forward(self, x):
         return self.model(x)
 
-
+# Define a custom dataset class
 class CustomDataset(Dataset):
     def __init__(self, image_dir, mask_dir, image_transform=None, mask_transform=None):
         self.image_dir = image_dir
@@ -88,7 +88,7 @@ class CustomDataset(Dataset):
 
         return image, mask, os.path.basename(img_path), os.path.basename(mask_path)
 
-
+# Function to visualize predictions from the generator
 def visualize_predictions(generator, dataloader, device):
     generator.eval()
     images, masks, img_basenames, mask_basenames = next(iter(dataloader))
@@ -116,24 +116,25 @@ def visualize_predictions(generator, dataloader, device):
 
     plt.show()
 
+# Function to train the GAN model
 def train(generator, discriminator, dataloader, optimizer_G, optimizer_D, criterion, num_epochs, device):
     for epoch in range(num_epochs):
         for i, (images, masks, _, _) in enumerate(dataloader):
             images = images.to(device)
             masks = masks.to(device)
 
-            
+            # Prepare generator input
             masked_images = images * (1 - masks)
             generator_input = torch.cat((masked_images, masks), dim=1)
 
-            
+            # Train the generator            
             optimizer_G.zero_grad()
             generated_images = generator(generator_input, images, masks)
             gen_loss = criterion(discriminator(generated_images), torch.ones_like(discriminator(generated_images)))
             gen_loss.backward()
             optimizer_G.step()
 
-            
+            # Train the discriminator            
             optimizer_D.zero_grad()
             real_loss = criterion(discriminator(images), torch.ones_like(discriminator(images)))
             fake_loss = criterion(discriminator(generated_images.detach()), torch.zeros_like(discriminator(generated_images)))
@@ -141,13 +142,14 @@ def train(generator, discriminator, dataloader, optimizer_G, optimizer_D, criter
             dis_loss.backward()
             optimizer_D.step()
 
+            # Print the loss values periodically
             if i % 10 == 0:
                 print(f"Epoch [{epoch+1}/{num_epochs}], Step [{i+1}/{len(dataloader)}], Gen Loss: {gen_loss.item()}, Dis Loss: {dis_loss.item()}")
 
         if epoch % 10 == 0:
             visualize_predictions(generator, dataloader, device)
 
-
+# Set hyperparameters and directories
 batch_size = 16
 learning_rate = 0.0002
 num_epochs = 300
@@ -155,6 +157,7 @@ image_dir = "/mnt/shared/dils/projects/water_quality_temp/data/data_061024_combi
 mask_dir = "/mnt/shared/dils/projects/water_quality_temp/data/data_061024_combined/masks_061024"
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+# Define image and mask transformations
 image_transform = transforms.Compose([
     transforms.Resize((256, 256)),
     transforms.ToTensor(),
@@ -166,18 +169,23 @@ mask_transform = transforms.Compose([
     transforms.ToTensor()
 ])
 
+# Create dataset and dataloader
 dataset = CustomDataset(image_dir=image_dir, mask_dir=mask_dir, image_transform=image_transform, mask_transform=mask_transform)
 dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=4)
 
+# Initialize the generator and discriminator models
 generator = Generator().to(device)
 discriminator = Discriminator().to(device)
 
+# Define loss function and optimizers
 criterion = nn.BCELoss()
 optimizer_G = optim.Adam(generator.parameters(), lr=learning_rate, betas=(0.5, 0.999))
 optimizer_D = optim.Adam(discriminator.parameters(), lr=learning_rate, betas=(0.5, 0.999))
 
+# Train the models
 train(generator, discriminator, dataloader, optimizer_G, optimizer_D, criterion, num_epochs, device)
 
+# Save the trained model weights
 torch.save(generator.state_dict(), 'generator.pth')
 torch.save(discriminator.state_dict(), 'discriminator.pth')
 
