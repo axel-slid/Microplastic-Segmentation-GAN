@@ -1,15 +1,15 @@
 # %%
-
 import torch
 import torch.nn as nn
 from torchvision import transforms
 from PIL import Image
 import matplotlib.pyplot as plt
 
-
+# Define the Generator class, a neural network model for image generation
 class Generator(nn.Module):
     def __init__(self):
         super(Generator, self).__init__()
+        # Define the encoder part of the generator network
         self.encoder = nn.Sequential(
             nn.Conv2d(4, 64, kernel_size=4, stride=2, padding=1), 
             nn.ReLU(),
@@ -20,6 +20,7 @@ class Generator(nn.Module):
             nn.Conv2d(256, 512, kernel_size=4, stride=2, padding=1),
             nn.ReLU(),
         )
+        # Define the decoder part of the generator network        
         self.decoder = nn.Sequential(
             nn.ConvTranspose2d(512, 256, kernel_size=4, stride=2, padding=1),
             nn.ReLU(),
@@ -30,21 +31,21 @@ class Generator(nn.Module):
             nn.ConvTranspose2d(64, 3, kernel_size=4, stride=2, padding=1),
             nn.Tanh(),  
         )
-
+    # Define the forward pass of the generator
     def forward(self, x, original_image, mask):
         x = self.encoder(x)
         x = self.decoder(x)
         x = x * mask + original_image * (1 - mask)
         return x
 
-
+# Load a pre-trained generator model
 generator = Generator()
 generator.load_state_dict(torch.load('generator.pth'))
 generator.eval()
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 generator.to(device)
 
-
+# Function to preprocess input images and masks
 def preprocess(image_path, mask_path, image_transform, mask_transform):
     image = Image.open(image_path).convert('RGB')
     mask = Image.open(mask_path).convert('L')
@@ -54,8 +55,9 @@ def preprocess(image_path, mask_path, image_transform, mask_transform):
 
     return image, mask
 
-
+# Function to perform inference using the generator model
 def inference(image_path, mask_path, generator, device):
+    # Define the transformations for the input image and mask
     image_transform = transforms.Compose([
         transforms.Resize((256, 256)),
         transforms.ToTensor(),
@@ -67,10 +69,12 @@ def inference(image_path, mask_path, generator, device):
         transforms.ToTensor()
     ])
 
+    # Preprocess the input image and mask
     image, mask = preprocess(image_path, mask_path, image_transform, mask_transform)
     image = image.to(device).unsqueeze(0)
     mask = mask.to(device).unsqueeze(0)
 
+    # Perform inference with the generator model
     with torch.no_grad():
         masked_image = image * (1 - mask)
         generator_input = torch.cat((masked_image, mask), dim=1)
@@ -79,12 +83,14 @@ def inference(image_path, mask_path, generator, device):
 
     return generated_image
 
-
+# Define a list of paths to input images and masks
 image_path = '/mnt/shared/dils/projects/water_quality_temp/data/data_nonmicroplastic/non_microplastic/0011.png'
 mask_path = '/mnt/shared/dils/projects/water_quality_temp/data/data_061024_combined/masks_061024/0333.png'
 
+# Perform inference to generate an image
 generated_image = inference(image_path, mask_path, generator, device)
 
+# Plot the original image, mask, and generated image
 plt.figure(figsize=(12, 6))
 plt.subplot(1, 3, 1)
 plt.imshow(Image.open(image_path))
@@ -102,8 +108,9 @@ plt.title('Generated Image')
 plt.axis('off')
 
 plt.show()
-# %%
 
+
+# %%
 import torch
 import torch.nn as nn
 from torchvision import transforms
@@ -220,3 +227,4 @@ for i in range(3):
 
 plt.subplots_adjust(wspace=0.01, hspace=0.01)
 plt.show()
+
